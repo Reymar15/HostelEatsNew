@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "installCommand": "composer install --no-dev --prefer-dist --optimize-autoloader && npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "functions": {
+    "api/index.php": {
+      "runtime": "vercel-php@0.7.4",
+      "includeFiles": "{app,bootstrap,config,database,public,resources,routes,storage,vendor}/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/api/index.php"
+    }
+  ]
+}
