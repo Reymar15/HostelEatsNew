@@ -64,7 +64,7 @@
                         <td>{{ \Illuminate\Support\Carbon::parse($order['created_at'] ?? now())->format('M d, Y h:i A') }}</td>
                         <td>
                             <form method="POST"
-                                action="{{ route('admin.orders.status', $order['id'] ?? $order['order_number']) }}"
+                                action="{{ route('admin.orders.status.session', $order['id'] ?? $order['order_number']) }}"
                                 class="inline-status-form">
                                 @csrf @method('PATCH')
                                 <select class="status-select {{ $status }}" name="delivery_status" onchange="this.form.submit()">

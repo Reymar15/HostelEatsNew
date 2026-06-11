@@ -53,7 +53,13 @@
     </section>
 
     <div class="branch-detail-actions">
-        <a class="secondary-action" href="{{ route('branches.index') }}">Back to Branches</a>
-        <a class="primary-action" href="{{ route('menu.index') }}">View All Menu</a>
+        <a class="secondary-action" href="{{ route('branches.index') }}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            Back to Branches
+        </a>
+        <a class="primary-action" href="{{ route('menu.index') }}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1" ry="1"/></svg>
+            View All Menu
+        </a>
     </div>
 @endsection

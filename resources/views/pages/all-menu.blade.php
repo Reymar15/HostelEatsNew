@@ -32,10 +32,16 @@
                     </div>
                 </div>
 
-                <div class="menu-grid branch-food-grid">
-                    @foreach ($foodsByBranch[$branch['name']] ?? [] as $food)
-                        @include('pages.partials.food-card', ['food' => $food])
-                    @endforeach
+                <div class="branch-food-grid-wrap">
+                    <div class="branch-food-grid-header">
+                        <span class="branch-food-grid-label">{{ $branch['name'] }} Menu</span>
+                        <span class="branch-food-grid-count">{{ count($foodsByBranch[$branch['name']] ?? []) }} items</span>
+                    </div>
+                    <div class="menu-grid branch-food-grid">
+                        @foreach ($foodsByBranch[$branch['name']] ?? [] as $food)
+                            @include('pages.partials.food-card', ['food' => $food])
+                        @endforeach
+                    </div>
                 </div>
             </section>
         @endforeach

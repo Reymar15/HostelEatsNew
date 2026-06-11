@@ -99,7 +99,7 @@
                         <td>{{ $order->order_date ? $order->order_date->format('M d, Y h:i A') : ($order->created_at ? $order->created_at->format('M d, Y h:i A') : '—') }}</td>
                         <td>
                             @if ($canEdit)
-                                <form method="POST" action="{{ route('admin.orders.status', $order->id) }}" class="inline-status-form">
+                                <form method="POST" action="{{ route('admin.orders.update.status', $order->id) }}" class="inline-status-form">
                                     @csrf @method('PATCH')
                                     <select name="status" class="status-select {{ strtolower(str_replace(' ', '-', $statusKey)) }}" onchange="this.form.submit()">
                                         @foreach ($statuses as $s)

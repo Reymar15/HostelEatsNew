@@ -91,6 +91,20 @@ class AdminOrderController extends Controller
 
         $order->update(['status' => $validated['status']]);
 
+        // Send email notification when order is marked Completed
+        if ($validated['status'] === 'Completed' && $order->user) {
+            try {
+                $order->user->notify(new \App\Notifications\OrderCompletedNotification(
+                    (string) $order->id,
+                    $order->food_item ?? 'Your order',
+                    (float) $order->total,
+                    $order->branch->name ?? 'HostelEats'
+                ));
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Order completed email failed: ' . $e->getMessage());
+            }
+        }
+
         return back()->with('success', 'Order status updated.');
     }
 

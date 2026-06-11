@@ -2,22 +2,18 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use App\Notifications\HostelEatsVerifyEmail;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'name',
         'email',
@@ -27,28 +23,18 @@ class User extends Authenticatable
         'role',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_admin'  => 'boolean',
-            'branch_id' => 'integer',
+            'password'          => 'hashed',
+            'is_admin'          => 'boolean',
+            'branch_id'         => 'integer',
         ];
     }
 
@@ -62,9 +48,24 @@ class User extends Authenticatable
         return $this->role === 'branch_admin';
     }
 
+    public function initials(): string
+    {
+        $parts = array_filter(explode(' ', trim($this->name)));
+        $i = strtoupper(substr($parts[0] ?? 'G', 0, 1));
+        if (count($parts) > 1) {
+            $i .= strtoupper(substr(end($parts), 0, 1));
+        }
+        return $i;
+    }
+
     public function branch()
     {
-        return $this->belongsTo(\App\Models\Branch::class);
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new HostelEatsVerifyEmail);
     }
 
     public function orders()

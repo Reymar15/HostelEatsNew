@@ -1,6 +1,6 @@
 @extends('layouts.auth', [
-    'headline' => 'Create your HostelEats account.',
-    'subheadline' => 'Signup stores sample student details in the Laravel session only, with no database required.',
+    'headline'    => 'Create your HostelEats account.',
+    'subheadline' => 'Register to browse branches, order food, and track your deliveries.',
 ])
 
 @section('content')
@@ -9,16 +9,18 @@
         <div class="auth-card-head">
             <p class="crumb">User Signup</p>
             <h2>Create Account</h2>
-            <span>Fill in your account details to continue.</span>
+            <span>Fill in your details. A verification email will be sent to your Gmail.</span>
         </div>
 
         <label>Full Name
             <input type="text" name="name" value="{{ old('name') }}" placeholder="Juan Dela Cruz" required minlength="3">
         </label>
+        @error('name')<p class="form-error">{{ $message }}</p>@enderror
 
-        <label>Email
-            <input type="email" name="email" value="{{ old('email') }}" placeholder="student@email.com" required>
+        <label>Email Address
+            <input type="email" name="email" value="{{ old('email') }}" placeholder="student@gmail.com" required>
         </label>
+        @error('email')<p class="form-error">{{ $message }}</p>@enderror
 
         <label>Password
             <span class="password-field">
@@ -31,6 +33,7 @@
                 </button>
             </span>
         </label>
+        @error('password')<p class="form-error">{{ $message }}</p>@enderror
 
         <label>Confirm Password
             <span class="password-field">
@@ -44,11 +47,11 @@
             </span>
         </label>
 
-        @if ($errors->any())
-            <p class="form-error">{{ $errors->first() }}</p>
+        @if (session('error'))
+            <p class="form-error">{{ session('error') }}</p>
         @endif
 
-        <button type="submit" class="primary-action">Signup</button>
+        <button type="submit" class="primary-action">Create Account</button>
 
         <p class="auth-link">Already registered? <a href="{{ route('login') }}">Back to Login</a></p>
     </form>

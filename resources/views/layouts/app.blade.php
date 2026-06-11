@@ -27,7 +27,9 @@
             $userInitials .= strtoupper(substr(end($nameParts), 0, 1));
         }
         $adminInitials = $isAdmin ? $userInitials : 'AD';
-        $displayBlock = session('auth_hostel_block') ?? ($profile['hostel_block'] ?? '');
+        $displayBlock = session('auth_hostel_block')
+            ? session('auth_hostel_block') . (session('auth_room_number') ? ' - ' . session('auth_room_number') : '')
+            : ($profile['hostel_block'] ?? '');
         $adminSearchIndex = $isAdmin
             ? [
                 'Foods' => collect($foods ?? [])->map(fn ($item) => ['label' => $item['name'] ?? 'Food', 'meta' => ($item['branch'] ?? '').' · '.($item['category'] ?? ''), 'route' => route('admin.foods')])->values(),
@@ -37,44 +39,58 @@
             ]
             : [];
         $navGroups = $isAdmin
-            ? [
-                'Admin' => [
-                    ['label' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => 'D'],
-                    ['label' => 'Foods', 'route' => 'admin.foods', 'icon' => 'F'],
-                    ['label' => 'Orders', 'route' => 'admin.orders', 'icon' => 'O'],
-                    ['label' => 'Branches', 'route' => 'admin.branches', 'icon' => 'B'],
-                    ['label' => 'Users', 'route' => 'admin.users', 'icon' => 'U'],
-                ],
-                'Store Dashboards' => collect($branches ?? [])->map(fn ($branch) => [
-                    'label' => $branch['name'] ?? 'Store',
-                    'route' => 'admin.store.dashboard',
-                    'params' => ['branch' => $branch['id'] ?? $branch['slug'] ?? 1],
-                    'icon' => strtoupper(substr($branch['name'] ?? 'S', 0, 1)),
-                ])->values()->all(),
-                'Insights' => [
-                    ['label' => 'Analytics', 'route' => 'admin.analytics', 'icon' => 'A'],
-                    ['label' => 'Reports', 'route' => 'admin.reports', 'icon' => 'R'],
-                ],
-                'System' => [
-                    ['label' => 'Settings', 'route' => 'admin.settings', 'icon' => 'S'],
-                    ['label' => 'Logout', 'route' => 'hostel.logout', 'icon' => 'L', 'logout' => true],
-                ],
-            ]
+            ? (
+                $adminScope === 'branch'
+                ? [
+                    'Main' => [
+                        ['label' => 'Dashboard', 'route' => 'admin.store.dashboard', 'params' => ['branch' => $adminBranchId], 'icon' => 'D'],
+                        ['label' => 'Orders',    'route' => 'admin.store.dashboard', 'params' => ['branch' => $adminBranchId], 'icon' => 'O', 'hash' => 'store-orders-panel'],
+                        ['label' => 'Customers', 'route' => 'admin.store.customers', 'params' => ['branchId' => $adminBranchId], 'icon' => 'C'],
+                        ['label' => 'Analytics', 'route' => 'admin.store.dashboard', 'params' => ['branch' => $adminBranchId], 'icon' => 'A', 'hash' => 'sales-reports'],
+                        ['label' => 'Settings',  'route' => 'admin.settings', 'icon' => 'S'],
+                        ['label' => 'Logout',    'route' => 'hostel.logout',  'icon' => 'L', 'logout' => true],
+                    ],
+                ]
+                : [
+                    'Admin' => [
+                        ['label' => 'Dashboard', 'route' => 'admin.dashboard',   'icon' => 'D'],
+                        ['label' => 'Foods',     'route' => 'admin.foods',        'icon' => 'F'],
+                        ['label' => 'Orders',    'route' => 'admin.orders',       'icon' => 'O'],
+                        ['label' => 'Customers', 'route' => 'admin.customers',    'icon' => 'C'],
+                        ['label' => 'Branches',  'route' => 'admin.branches',     'icon' => 'B'],
+                        ['label' => 'Users',     'route' => 'admin.users',        'icon' => 'U'],
+                    ],
+                    'Store Dashboards' => collect($branches ?? [])->map(fn ($branch) => [
+                        'label'  => $branch['name'] ?? 'Store',
+                        'route'  => 'admin.store.dashboard',
+                        'params' => ['branch' => $branch['id'] ?? $branch['slug'] ?? 1],
+                        'icon'   => strtoupper(substr($branch['name'] ?? 'S', 0, 1)),
+                    ])->values()->all(),
+                    'Insights' => [
+                        ['label' => 'Analytics', 'route' => 'admin.analytics', 'icon' => 'A'],
+                        ['label' => 'Reports',   'route' => 'admin.reports',   'icon' => 'R'],
+                    ],
+                    'System' => [
+                        ['label' => 'Settings', 'route' => 'admin.settings', 'icon' => 'S'],
+                        ['label' => 'Logout',   'route' => 'hostel.logout',  'icon' => 'L', 'logout' => true],
+                    ],
+                ]
+            )
             : [
                 'Main' => [
-                    ['label' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'D'],
-                    ['label' => 'All Menu', 'route' => 'menu.index', 'icon' => 'M'],
-                    ['label' => 'Branches', 'route' => 'branches.index', 'icon' => 'B'],
-                    ['label' => 'Categories', 'route' => 'categories.index', 'icon' => 'C'],
+                    ['label' => 'Dashboard',     'route' => 'dashboard',       'icon' => 'D'],
+                    ['label' => 'All Menu',       'route' => 'menu.index',      'icon' => 'M'],
+                    ['label' => 'Branches',       'route' => 'branches.index',  'icon' => 'B'],
+                    ['label' => 'Categories',     'route' => 'categories.index','icon' => 'C'],
                 ],
                 'Orders' => [
-                    ['label' => 'My Orders', 'route' => 'orders.current', 'icon' => 'O', 'badge' => $cartCount],
-                    ['label' => 'Order History', 'route' => 'orders.history', 'icon' => 'H'],
+                    ['label' => 'My Orders',      'route' => 'orders.current',  'icon' => 'O', 'badge' => $cartCount],
+                    ['label' => 'Order History',  'route' => 'orders.history',  'icon' => 'H'],
                 ],
                 'Account' => [
-                    ['label' => 'Profile', 'route' => 'profile.show', 'icon' => 'P'],
+                    ['label' => 'Profile',  'route' => 'profile.show',   'icon' => 'P'],
                     ['label' => 'Settings', 'route' => 'settings.index', 'icon' => 'S'],
-                    ['label' => 'Logout', 'route' => 'hostel.logout', 'icon' => 'L', 'logout' => true],
+                    ['label' => 'Logout',   'route' => 'hostel.logout',  'icon' => 'L', 'logout' => true],
                 ],
             ];
 
@@ -106,7 +122,7 @@
 
             <nav class="nav" data-sidebar-nav>
                 @foreach ($navGroups as $group => $links)
-                    @if ($isAdmin && $adminScope === 'branch' && ! in_array($group, ['Store Dashboards', 'System'], true))
+                    @if ($isAdmin && $adminScope === 'branch' && ! in_array($group, ['Main'], true))
                         @continue
                     @endif
                     <span class="nav-label">{{ $group }}</span>
@@ -184,6 +200,65 @@
                     {{ $slot }}
                 @endisset
             </main>
+
+            @if (! $isAdmin)
+            <footer class="he-footer">
+                <div class="he-footer-inner">
+                    <div class="he-footer-grid">
+                        <div class="he-footer-brand">
+                            <div class="brand-mark">HE</div>
+                            <strong>HostelEats</strong>
+                            <p>Your campus food ordering system. Order from your favourite branches — Jollibee, McDonald's, Mang Inasal, KFC, and Starbucks — delivered right to your hostel.</p>
+                            <div style="display:flex;gap:10px;margin-top:4px;">
+                                <a href="#" style="display:grid;width:34px;height:34px;place-items:center;border-radius:8px;background:#374151;color:#d1d5db;text-decoration:none;font-size:.85rem;font-weight:900;transition:background 160ms;" onmouseover="this.style.background='#f97316'" onmouseout="this.style.background='#374151'">f</a>
+                                <a href="#" style="display:grid;width:34px;height:34px;place-items:center;border-radius:8px;background:#374151;color:#d1d5db;text-decoration:none;font-size:.85rem;font-weight:900;transition:background 160ms;" onmouseover="this.style.background='#f97316'" onmouseout="this.style.background='#374151'">in</a>
+                                <a href="#" style="display:grid;width:34px;height:34px;place-items:center;border-radius:8px;background:#374151;color:#d1d5db;text-decoration:none;font-size:.85rem;font-weight:900;transition:background 160ms;" onmouseover="this.style.background='#f97316'" onmouseout="this.style.background='#374151'">tw</a>
+                            </div>
+                        </div>
+
+                        <div class="he-footer-col">
+                            <h4>Quick Links</h4>
+                            <ul>
+                                <li><a href="{{ route('dashboard') }}">🏠 Home</a></li>
+                                <li><a href="{{ route('menu.index') }}">🍔 All Menu</a></li>
+                                <li><a href="{{ route('branches.index') }}">🏪 Branches</a></li>
+                                <li><a href="{{ route('categories.index') }}">📋 Categories</a></li>
+                                <li><a href="{{ route('orders.current') }}">📦 My Orders</a></li>
+                            </ul>
+                        </div>
+
+                        <div class="he-footer-col">
+                            <h4>Company</h4>
+                            <ul>
+                                <li><a href="#about">🏢 About Us</a></li>
+                                <li><a href="#privacy">🔒 Privacy Policy</a></li>
+                                <li><a href="#terms">📄 Terms of Service</a></li>
+                                <li><a href="#faq">❓ FAQ</a></li>
+                                <li><a href="#contact">📞 Contact Us</a></li>
+                            </ul>
+                        </div>
+
+                        <div class="he-footer-col he-footer-contact" id="contact">
+                            <h4>Contact Us</h4>
+                            <p><span>📍</span> Hostel Campus, University Avenue, Cebu City 6000</p>
+                            <p><span>📧</span> support@hosteleats.com</p>
+                            <p><span>📞</span> +63 912 345 6789</p>
+                            <p><span>⏰</span> Mon–Sun, 7:00 AM – 10:00 PM</p>
+                        </div>
+                    </div>
+
+                    <div class="he-footer-bottom">
+                        <p>© {{ date('Y') }} HostelEats. All rights reserved.</p>
+                        <div class="he-footer-bottom-links">
+                            <a href="#about">About Us</a>
+                            <a href="#privacy">Privacy Policy</a>
+                            <a href="#terms">Terms</a>
+                            <a href="#contact">Contact</a>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+            @endif
         </div>
     </div>
 
@@ -226,5 +301,6 @@
             window.hostelAdminSearchIndex = @json($adminSearchIndex);
         </script>
     @endif
+    @stack('scripts')
 </body>
 </html>

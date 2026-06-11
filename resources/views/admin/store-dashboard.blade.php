@@ -1,17 +1,45 @@
 @extends('layouts.app')
 
 @php
-    $money = fn ($value) => 'PHP'.number_format((float) $value, 2);
+    $money = function ($value) {
+        return 'PHP'.number_format((float) $value, 2);
+    };
+
     $isSuperAdmin = session('auth_admin_scope') === 'super';
+    $branchId = $storeBranch['id'] ?? null;
+
+    // DB-backed customer stats for this branch
+    try {
+        $dbCustomers = $branchId ? \App\Models\User::where('role', 'customer')
+            ->whereHas('orders', function ($q) use ($branchId) {
+                $q->where('branch_id', $branchId);
+            })->get() : collect();
+    } catch (\Exception $e) {
+        $dbCustomers = collect();
+    }
+
+    $totalCust = $dbCustomers->count();
+    $returningCust = $dbCustomers->filter(function ($u) use ($branchId) {
+        try {
+            return $u->orders()->where('branch_id', $branchId)->count() > 1;
+        } catch (\Exception $e) {
+            return false;
+        }
+    })->count();
+
+    $newCustMonth = $dbCustomers->filter(function ($u) {
+        return $u->created_at >= now()->startOfMonth();
+    })->count();
+
     $storeCards = [
-        ['label' => 'Total Sales Today', 'value' => $money($storeStats['sales_today']), 'icon' => 'S', 'desc' => 'Branch revenue today', 'tone' => 'green'],
-        ['label' => 'Sales This Month', 'value' => $money($storeStats['sales_month']), 'icon' => 'M', 'desc' => 'Month-to-date sales', 'tone' => 'blue'],
-        ['label' => 'Total Orders', 'value' => $storeStats['total_orders'], 'icon' => 'O', 'desc' => 'Orders for this store', 'tone' => 'amber'],
-        ['label' => 'Inventory Items', 'value' => $storeStats['inventory_items'], 'icon' => 'I', 'desc' => 'Tracked menu stock', 'tone' => 'slate'],
-        ['label' => 'Low Stock Items', 'value' => $storeStats['low_stock'], 'icon' => 'L', 'desc' => 'Need restocking soon', 'tone' => 'red'],
-        ['label' => 'Pending Orders', 'value' => $storeStats['pending_orders'], 'icon' => 'P', 'desc' => 'Awaiting action', 'tone' => 'red'],
-        ['label' => 'Completed Orders', 'value' => $storeStats['completed_orders'], 'icon' => 'C', 'desc' => 'Finished pickups', 'tone' => 'green'],
-        ['label' => 'Cancelled Orders', 'value' => $storeStats['cancelled_orders'], 'icon' => 'X', 'desc' => 'Stopped orders', 'tone' => 'slate'],
+        ['label' => 'Total Sales Today',   'value' => $money($storeStats['sales_today']),      'icon' => 'S', 'desc' => 'Branch revenue today',    'tone' => 'green'],
+        ['label' => 'Sales This Month',    'value' => $money($storeStats['sales_month']),      'icon' => 'M', 'desc' => 'Month-to-date sales',      'tone' => 'blue'],
+        ['label' => 'Total Orders',        'value' => $storeStats['total_orders'],              'icon' => 'O', 'desc' => 'Orders for this store',    'tone' => 'amber'],
+        ['label' => 'Total Customers',     'value' => $totalCust,                               'icon' => 'C', 'desc' => 'Ordered from this branch',  'tone' => 'blue'],
+        ['label' => 'Returning Customers', 'value' => $returningCust,                           'icon' => 'R', 'desc' => 'More than 1 order',         'tone' => 'green'],
+        ['label' => 'New Customers',       'value' => $newCustMonth,                            'icon' => 'N', 'desc' => 'Registered this month',     'tone' => 'amber'],
+        ['label' => 'Pending Orders',      'value' => $storeStats['pending_orders'],            'icon' => 'P', 'desc' => 'Awaiting action',           'tone' => 'red'],
+        ['label' => 'Completed Orders',    'value' => $storeStats['completed_orders'],          'icon' => 'C', 'desc' => 'Finished pickups',          'tone' => 'green'],
     ];
 @endphp
 
@@ -62,6 +90,17 @@
                 <span>{{ $item['name'] }} has {{ $item['stock'] }} item{{ $item['stock'] === 1 ? '' : 's' }} remaining.</span>
             </article>
         @endforeach
+        @if ($branchId)
+            <article class="activity-item muted" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+                <div>
+                    <strong>Branch Customers</strong>
+                    <span>{{ $totalCust }} customer{{ $totalCust !== 1 ? 's' : '' }} have ordered from {{ $storeBranch['name'] }}.</span>
+                </div>
+                <a class="secondary-action" href="{{ route('admin.store.customers', $branchId) }}" style="white-space:nowrap;">
+                    View All Customers →
+                </a>
+            </article>
+        @endif
     </section>
 
     <section class="panel admin-table-gap" id="inventory-panel">
@@ -170,7 +209,7 @@
                             <td>{{ isset($order['created_at']) ? \Illuminate\Support\Carbon::parse($order['created_at'])->format('M d, Y h:i A') : '—' }}</td>
                             <td>
                                 <form method="POST"
-                                    action="{{ route('admin.orders.status', $order['id']) }}"
+                                    action="{{ route('admin.orders.status.session', $order['id']) }}"
                                     class="inline-status-form">
                                     @csrf @method('PATCH')
                                     <select

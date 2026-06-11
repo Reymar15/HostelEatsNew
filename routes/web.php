@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Auth\EmailVerificationController;
+use App\Http\Controllers\Auth\OtpController;
+use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BranchPageController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -535,92 +538,77 @@ SVG;
 Route::get('/login', fn () => $render('auth.login', 'User Login'))->name('login');
 Route::post('/login', function (Request $request) use ($userCredentials) {
     $credentials = $request->validate([
-        'email' => ['required', 'email'],
+        'email'    => ['required', 'email'],
         'password' => ['required'],
     ]);
 
-    $email = strtolower(trim($credentials['email']));
+    $email    = strtolower(trim($credentials['email']));
     $password = (string) $credentials['password'];
-    $registeredUsers = collect(session('registered_users', []));
-    $legacyRegisteredUser = session('registered_user');
 
-    if (is_array($legacyRegisteredUser)) {
-        $registeredUsers = $registeredUsers->push($legacyRegisteredUser);
+    // ── 1. Check DB-registered users first ───────────────────────────────────
+    try {
+        $dbUser = \App\Models\User::where('email', $email)
+            ->where('role', 'customer')
+            ->first();
+    } catch (\Throwable $e) {
+        report($e);
+        $dbUser = null;
     }
 
-    $registeredUser = $registeredUsers->first(function (array $user) use ($email, $password): bool {
-        return strtolower(trim($user['email'] ?? '')) === $email
-            && (string) ($user['password'] ?? '') === $password;
-    });
+    if ($dbUser && \Illuminate\Support\Facades\Hash::check($password, $dbUser->password)) {
+        // Unverified — generate fresh OTP and redirect to OTP page
+        if (! $dbUser->hasVerifiedEmail()) {
+            RegisterController::generateAndSendOtp($dbUser);
+            session([
+                'otp_user_id' => $dbUser->id,
+                'otp_email'   => $dbUser->email,
+                'otp_name'    => $dbUser->name,
+            ]);
+            return redirect()->route('otp.verify.form')
+                ->with('success', 'A new verification code has been sent to ' . $dbUser->email);
+        }
 
+        $request->session()->regenerate();
+        session([
+            'auth_role'         => 'user',
+            'auth_name'         => $dbUser->name,
+            'auth_email'        => $dbUser->email,
+            'auth_student_id'   => 'STU-' . str_pad($dbUser->id, 7, '0', STR_PAD_LEFT),
+            'auth_hostel_block' => $dbUser->hostel_block ?? 'Block A',
+            'auth_room_number'  => $dbUser->room_number  ?? '',
+        ]);
+
+        return redirect()->route('user.dashboard');
+    }
+
+    // ── 2. Fall back to legacy session-based demo user ────────────────────────
     $matchesDefaultUser = $email === strtolower($userCredentials['email'])
         && $credentials['password'] === $userCredentials['password'];
-    $matchesRegisteredUser = is_array($registeredUser);
 
-    if (! $matchesDefaultUser && ! $matchesRegisteredUser) {
-        return back()->withInput($request->only('email', 'remember'))->with('error', 'Wrong user email or password.');
+    if (! $matchesDefaultUser) {
+        return back()->withInput($request->only('email'))->with('error', 'Wrong email or password.');
     }
 
     $request->session()->regenerate();
-
-    $loggedInUser = $matchesRegisteredUser
-        ? $registeredUser
-        : [
-            'name' => 'Juan Dela Cruz',
-            'email' => $credentials['email'],
-            'student_id' => 'STU-2026-1048',
-            'hostel_block' => 'Block C - Room 214',
-        ];
-
     session([
-        'auth_role' => 'user',
-        'auth_name' => $loggedInUser['name'],
-        'auth_email' => $loggedInUser['email'],
-        'auth_student_id' => $loggedInUser['student_id'],
-        'auth_hostel_block' => $loggedInUser['hostel_block'],
+        'auth_role'         => 'user',
+        'auth_name'         => 'Juan Dela Cruz',
+        'auth_email'        => $credentials['email'],
+        'auth_student_id'   => 'STU-2026-1048',
+        'auth_hostel_block' => 'Block C - Room 214',
     ]);
 
     return redirect()->route('user.dashboard');
 })->name('login.store');
 
-Route::get('/signup', fn () => $render('auth.signup', 'User Signup'))->name('signup');
-Route::post('/signup', function (Request $request) {
-    $validated = $request->validate([
-        'name' => ['required', 'min:3'],
-        'email' => ['required', 'email'],
-        'password' => ['required', 'min:6', 'confirmed'],
-    ]);
+Route::get('/signup', fn () => $render('auth.signup', 'Create Account'))->name('signup');
+Route::post('/signup', [RegisterController::class, 'store'])->name('signup.store');
 
-    $email = strtolower(trim($validated['email']));
-    $registeredUsers = collect(session('registered_users', []))
-        ->reject(fn (array $user): bool => strtolower(trim($user['email'] ?? '')) === $email)
-        ->values();
-
-    $registeredUser = [
-        'name' => $validated['name'],
-        'email' => $email,
-        'student_id' => 'STU-2026-1048',
-        'hostel_block' => 'Block C - Room 214',
-        'password' => (string) $validated['password'],
-    ];
-
-    $registeredUsers->push($registeredUser);
-
-    session([
-        'registered_user' => $registeredUser,
-        'registered_users' => $registeredUsers->all(),
-        'auth_role' => 'user',
-        'auth_name' => $registeredUser['name'],
-        'auth_email' => $registeredUser['email'],
-        'auth_student_id' => $registeredUser['student_id'],
-        'auth_hostel_block' => $registeredUser['hostel_block'],
-    ]);
-
-    $request->session()->regenerate();
-
-    return redirect()->route('user.dashboard')
-        ->with('success', 'Signup successful. You are now logged in.');
-})->name('signup.store');
+// ─── OTP Verification Routes ─────────────────────────────────────────────────
+Route::get('/otp/verify',  [OtpController::class, 'showForm'])->name('otp.verify.form');
+Route::post('/otp/verify', [OtpController::class, 'verify'])->middleware('throttle:10,1')->name('otp.verify');
+Route::post('/otp/resend', [OtpController::class, 'resend'])->middleware('throttle:3,1')->name('otp.resend');
+Route::get('/otp/success', [OtpController::class, 'success'])->name('otp.success');
 
 Route::get('/admin/login', fn () => $render('auth.admin-login', 'Admin Login'))->name('admin.login');
 Route::post('/admin/login', function (Request $request) use ($adminAccounts) {
@@ -925,7 +913,7 @@ Route::patch('/admin/orders/{order}/status', function (Request $request, string 
     }
 
     $validated = $request->validate([
-        'delivery_status' => ['required', 'in:Pending,Preparing,Delivered,Cancelled'],
+        'delivery_status' => ['required', 'in:Pending,Preparing,Ready for Pickup,Completed,Cancelled'],
     ]);
 
     $orders = session('orders', []);
@@ -934,10 +922,44 @@ Route::patch('/admin/orders/{order}/status', function (Request $request, string 
         $orders[$order]['delivery_status'] = $validated['delivery_status'];
         $orders[$order]['status'] = strtolower($validated['delivery_status']);
         session(['orders' => $orders]);
+
+        // Send email when order is Completed
+        if ($validated['delivery_status'] === 'Completed') {
+            $o        = $orders[$order];
+            $email    = data_get($o, 'customer.email') ?? data_get($o, 'customer.full_name');
+            $dbUser   = \App\Models\User::where('email', session('auth_email'))->first();
+            // Try to find user by name if no email stored
+            $userName = data_get($o, 'customer.full_name', 'Customer');
+            $userEmail = data_get($o, 'customer.email');
+
+            if ($userEmail) {
+                $recipient = \App\Models\User::where('email', $userEmail)->first();
+                if (! $recipient) {
+                    // Build anonymous notifiable
+                    $recipient = new class($userEmail, $userName) extends \Illuminate\Notifications\AnonymousNotifiable {
+                        public string $name;
+                        public function __construct(string $email, string $name) {
+                            $this->name = $name;
+                            $this->routes['mail'] = $email;
+                        }
+                    };
+                }
+                try {
+                    $recipient->notify(new \App\Notifications\OrderCompletedNotification(
+                        $o['order_number'] ?? $order,
+                        $o['foods'] ?? 'Your order',
+                        (float) ($o['total'] ?? 0),
+                        $o['branch'] ?? 'HostelEats'
+                    ));
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Order completed email failed: ' . $e->getMessage());
+                }
+            }
+        }
     }
 
     return redirect()->route('admin.orders')->with('success', 'Order status updated.');
-})->name('admin.orders.status');
+})->name('admin.orders.status.session');
 Route::get('/admin/branches', fn () => $renderSuperAdmin('admin.branches', 'Branch Management'))->name('admin.branches');
 Route::get('/admin/users', fn () => $renderSuperAdmin('admin.users', 'User Management'))->name('admin.users');
 Route::get('/admin/analytics', fn () => $renderSuperAdmin('admin.analytics', 'Analytics'))->name('admin.analytics');
@@ -967,7 +989,7 @@ Route::prefix('/admin/customer-orders')->name('admin.orders.')->group(function (
             return $redirect;
         }
         return app(AdminOrderController::class)->updateStatus($req, $order);
-    })->name('status');
+    })->name('update.status');
 
     Route::delete('/{order}', function (\App\Models\Order $order) use ($requireAdmin) {
         if ($redirect = $requireAdmin()) {
@@ -992,3 +1014,20 @@ Route::get('/admin/stores/{branchId}/orders', function (int $branchId) use ($req
     }
     return app(AdminOrderController::class)->storeDashboardOrders($branchId);
 })->name('admin.store.orders');
+
+// Branch Customers
+use App\Http\Controllers\Admin\BranchCustomerController;
+Route::get('/admin/stores/{branchId}/customers', function (int $branchId) use ($requireAdmin) {
+    if ($redirect = $requireAdmin()) {
+        return $redirect;
+    }
+    return app(BranchCustomerController::class)->index($branchId);
+})->name('admin.store.customers');
+
+// Super Admin: all customers (filterable by branch)
+Route::get('/admin/customers', function (\Illuminate\Http\Request $req) use ($requireAdmin) {
+    if ($redirect = $requireAdmin()) {
+        return $redirect;
+    }
+    return app(BranchCustomerController::class)->all($req);
+})->name('admin.customers');
